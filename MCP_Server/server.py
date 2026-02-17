@@ -269,6 +269,27 @@ def get_session_info(ctx: Context) -> str:
         return f"Error getting session info: {str(e)}"
 
 @mcp.tool()
+def get_cpu_load(ctx: Context) -> str:
+    """Get CPU load metrics for the Ableton session.
+
+    Returns global average/peak process usage and per-track performance impact.
+    Values are normalized (0.0 to 1.0) representing audio processing load.
+
+    Returns:
+    - average_process_usage: Smoothed global CPU load
+    - peak_process_usage: Peak global CPU load
+    - tracks: List with each track's name and performance_impact
+    - master: Master track performance_impact
+    """
+    try:
+        ableton = get_ableton_connection()
+        result = ableton.send_command("get_cpu_load")
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error getting CPU load from Ableton: {str(e)}")
+        return f"Error getting CPU load: {str(e)}"
+
+@mcp.tool()
 def get_track_info(ctx: Context, track_index: int) -> str:
     """
     Get detailed information about a specific track in Ableton.

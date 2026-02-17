@@ -222,6 +222,8 @@ class AbletonMCP(ControlSurface):
             # Route the command to the appropriate handler
             if command_type == "get_session_info":
                 response["result"] = self._get_session_info()
+            elif command_type == "get_cpu_load":
+                response["result"] = self._get_cpu_load()
             elif command_type == "get_track_info":
                 track_index = params.get("track_index", 0)
                 response["result"] = self._get_track_info(track_index)
@@ -342,7 +344,47 @@ class AbletonMCP(ControlSurface):
         return response
     
     # Command implementations
-    
+
+    def _get_cpu_load(self):
+        """Get CPU load metrics: global average/peak and per-track performance impact"""
+        try:
+            app = self.application()
+
+            # Global CPU metrics
+            result = {
+                "average_process_usage": app.average_process_usage,
+                "peak_process_usage": app.peak_process_usage,
+                "tracks": []
+            }
+
+            # Per-track performance impact
+            for track_index, track in enumerate(self._song.tracks):
+                result["tracks"].append({
+                    "index": track_index,
+                    "name": track.name,
+                    "performance_impact": track.performance_impact
+                })
+
+            # Return tracks
+            for track_index, track in enumerate(self._song.return_tracks):
+                result["tracks"].append({
+                    "index": "R" + str(track_index),
+                    "name": track.name,
+                    "performance_impact": track.performance_impact
+                })
+
+            # Master track
+            master = self._song.master_track
+            result["master"] = {
+                "name": "Master",
+                "performance_impact": master.performance_impact
+            }
+
+            return result
+        except Exception as e:
+            self.log_message("Error getting CPU load: " + str(e))
+            raise
+
     def _get_session_info(self):
         """Get information about the current session"""
         try:
