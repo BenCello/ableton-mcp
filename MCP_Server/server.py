@@ -583,6 +583,76 @@ def set_device_parameter(
 
 
 @mcp.tool()
+def set_device_parameter_by_name(
+    ctx: Context,
+    track_index: int,
+    device_index: int,
+    parameter_name: str,
+    value: float,
+) -> str:
+    """
+    Set a device parameter to a specific value, identified by name.
+
+    Use get_device_parameters first to see available parameter names and ranges.
+    Matches against both the display name and original_name; returns an error
+    listing available names if the name is not found.
+
+    Parameters:
+    - track_index: Track that owns the device
+    - device_index: Index into the track's device chain
+    - parameter_name: Exact name of the parameter (as shown in Live)
+    - value: New parameter value (Live parameter units; clamped to min/max)
+    """
+    try:
+        ableton = get_ableton_connection()
+        result = ableton.send_command(
+            "set_device_parameter_by_name",
+            {
+                "track_index": track_index,
+                "device_index": device_index,
+                "parameter_name": parameter_name,
+                "value": value,
+            },
+        )
+        return (
+            f"Set {result.get('parameter', parameter_name)} on {result.get('device', '')} "
+            f"to {result.get('value')} (range {result.get('min')}–{result.get('max')})"
+        )
+    except Exception as e:
+        logger.error(f"Error setting device parameter by name: {str(e)}")
+        return f"Error setting device parameter by name: {str(e)}"
+
+
+@mcp.tool()
+def get_cpu_load(ctx: Context) -> str:
+    """
+    Get Ableton Live CPU load metrics.
+
+    Returns the global average and peak process usage percentages,
+    plus the performance_impact value for every track (including return
+    tracks and the master track).
+    """
+    try:
+        ableton = get_ableton_connection()
+        result = ableton.send_command("get_cpu_load", {})
+        lines = [
+            f"Average CPU: {result.get('average_process_usage', 0):.1f}%",
+            f"Peak CPU:    {result.get('peak_process_usage', 0):.1f}%",
+            "",
+            "Per-track performance impact:",
+        ]
+        for t in result.get("tracks", []):
+            lines.append(f"  [{t['index']}] {t['name']}: {t['performance_impact']:.4f}")
+        master = result.get("master", {})
+        if master:
+            lines.append(f"  [M] {master.get('name', 'Master')}: {master.get('performance_impact', 0):.4f}")
+        return "\n".join(lines)
+    except Exception as e:
+        logger.error(f"Error getting CPU load: {str(e)}")
+        return f"Error getting CPU load: {str(e)}"
+
+
+@mcp.tool()
 @telemetry_tool("get_session_snapshot")
 @trajectory_tool("get_session_snapshot")
 def get_session_snapshot(

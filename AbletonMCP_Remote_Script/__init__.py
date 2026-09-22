@@ -34,7 +34,7 @@ MAX_REQUEST_BYTES = 16 * 1024 * 1024
 
 # Bumped whenever the TCP command surface changes; the MCP server compares
 # this to EXPECTED_REMOTE_SCRIPT_VERSION.
-SCRIPT_VERSION = "1.7.1"
+SCRIPT_VERSION = "1.7.1+bnl.1"
 PROTOCOL_VERSION = 1
 
 SCRIPT_CAPABILITIES = [
@@ -57,6 +57,8 @@ SCRIPT_CAPABILITIES = [
     "create_locator",
     "delete_clip",
     "clear_notes_from_clip",
+    "get_cpu_load",
+    "set_device_parameter_by_name",
 ]
 
 def create_instance(c_instance):
@@ -478,6 +480,40 @@ class AbletonMCP(ControlSurface):
                             params.get("track_index", 0),
                             params.get("device_index", 0),
                             params.get("parameter_index", 0),
+                            params.get("value", 0.0),
+                        )
+                        response_queue.put({"status": "success", "result": result})
+                    except Exception as e:
+                        self.log_message("Error in main thread task: " + str(e))
+                        self.log_message(traceback.format_exc())
+                        response_queue.put({"status": "error", "message": str(e)})
+
+                try:
+                    self.schedule_message(0, main_thread_task)
+                except AssertionError:
+                    main_thread_task()
+
+                try:
+                    task_response = response_queue.get(timeout=10.0)
+                    if task_response.get("status") == "error":
+                        response["status"] = "error"
+                        response["message"] = task_response.get("message", "Unknown error")
+                    else:
+                        response["result"] = task_response.get("result", {})
+                except queue.Empty:
+                    response["status"] = "error"
+                    response["message"] = "Timeout waiting for operation to complete"
+            elif command_type == "get_cpu_load":
+                response["result"] = self._get_cpu_load()
+            elif command_type == "set_device_parameter_by_name":
+                response_queue = queue.Queue()
+
+                def main_thread_task():
+                    try:
+                        result = self._set_device_parameter_by_name(
+                            params.get("track_index", 0),
+                            params.get("device_index", 0),
+                            params.get("parameter_name", ""),
                             params.get("value", 0.0),
                         )
                         response_queue.put({"status": "success", "result": result})
@@ -2315,6 +2351,68 @@ class AbletonMCP(ControlSurface):
             }
         except Exception as e:
             self.log_message("Error setting device parameter: " + str(e))
+            raise
+
+    def _set_device_parameter_by_name(self, track_index, device_index, parameter_name, value):
+        """Set a device parameter by name"""
+        try:
+            if track_index < 0 or track_index >= len(self._song.tracks):
+                raise IndexError("Track index out of range")
+            track = self._song.tracks[track_index]
+            if device_index < 0 or device_index >= len(track.devices):
+                raise IndexError("Device index out of range")
+            device = track.devices[device_index]
+            found_param = None
+            for param in device.parameters:
+                if param.name == parameter_name or param.original_name == parameter_name:
+                    found_param = param
+                    break
+            if not found_param:
+                available = [p.name for p in device.parameters]
+                raise ValueError("Parameter '{}' not found. Available: {}".format(
+                    parameter_name, ", ".join(available)))
+            clamped = max(found_param.min, min(found_param.max, value))
+            found_param.value = clamped
+            return {
+                "device": device.name,
+                "parameter": found_param.name,
+                "value": found_param.value,
+                "min": found_param.min,
+                "max": found_param.max,
+            }
+        except Exception as e:
+            self.log_message("Error setting device parameter by name: " + str(e))
+            raise
+
+    def _get_cpu_load(self):
+        """Get CPU load metrics: global average/peak and per-track performance impact"""
+        try:
+            app = self.application()
+            result = {
+                "average_process_usage": app.average_process_usage,
+                "peak_process_usage": app.peak_process_usage,
+                "tracks": [],
+            }
+            for track_index, track in enumerate(self._song.tracks):
+                result["tracks"].append({
+                    "index": track_index,
+                    "name": track.name,
+                    "performance_impact": track.performance_impact,
+                })
+            for track_index, track in enumerate(self._song.return_tracks):
+                result["tracks"].append({
+                    "index": "R" + str(track_index),
+                    "name": track.name,
+                    "performance_impact": track.performance_impact,
+                })
+            master = self._song.master_track
+            result["master"] = {
+                "name": "Master",
+                "performance_impact": master.performance_impact,
+            }
+            return result
+        except Exception as e:
+            self.log_message("Error getting CPU load: " + str(e))
             raise
 
     def get_browser_tree(self, category_type="all"):
