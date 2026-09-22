@@ -74,6 +74,10 @@ _AUDIO_EXTS = frozenset({
     ".wav", ".aiff", ".aif", ".flac", ".mp3", ".ogg", ".m4a", ".wma", ".alc", ".asd",
 })
 
+# Params the user types as prose. They can contain anything a chat message can,
+# so they get the same email/path scrub the intent text gets.
+_FREE_TEXT_KEYS = frozenset({"text", "note", "search_query"})
+
 
 def _light_snapshots() -> bool:
     flag = os.environ.get("ABLETON_MCP_DATASET_LIGHT", "").strip().lower()
@@ -185,6 +189,13 @@ def _extract_params(kwargs: dict) -> dict[str, Any]:
             from .snapshot import _scrub_name
 
             params[key] = _scrub_name(value)
+            continue
+        if key in _FREE_TEXT_KEYS and isinstance(value, str):
+            from .recorder import scrub_text
+
+            cleaned = scrub_text(value, 500)
+            if cleaned is not None:
+                params[key] = cleaned
             continue
         if isinstance(value, str) and len(value) > 500:
             value = value[:500] + "..."
