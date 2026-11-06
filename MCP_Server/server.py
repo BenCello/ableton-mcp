@@ -653,6 +653,68 @@ def get_cpu_load(ctx: Context) -> str:
 
 
 @mcp.tool()
+def get_return_tracks(ctx: Context, include_params: bool = False) -> str:
+    """
+    Get the return tracks (A, B, ...) with their device chains.
+
+    Return tracks hold no clips in Live, so only mixer state and devices
+    are reported.
+
+    Parameters:
+    - include_params: Include every device parameter. Off by default —
+      devices that are racks recurse into their chains, so enabling this
+      on a rack-heavy return can produce a very large response.
+    """
+    try:
+        ableton = get_ableton_connection()
+        result = ableton.send_command(
+            "get_return_tracks", {"include_params": include_params}
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error getting return tracks: {str(e)}")
+        return f"Error getting return tracks: {str(e)}"
+
+
+@mcp.tool()
+def get_master_track(ctx: Context, include_params: bool = False) -> str:
+    """
+    Get the master (main) track: mixer state and its device chain.
+
+    Parameters:
+    - include_params: Include every device parameter. Off by default —
+      devices that are racks recurse into their chains, so enabling this
+      on a rack-heavy master chain can produce a very large response.
+    """
+    try:
+        ableton = get_ableton_connection()
+        result = ableton.send_command(
+            "get_master_track", {"include_params": include_params}
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error getting master track: {str(e)}")
+        return f"Error getting master track: {str(e)}"
+
+
+@mcp.tool()
+def get_scenes(ctx: Context) -> str:
+    """
+    List the session's scenes with name, tempo and trigger state.
+
+    Scenes are song-level, not a property of the master track, even though
+    Live draws their launch buttons in the master column.
+    """
+    try:
+        ableton = get_ableton_connection()
+        result = ableton.send_command("get_scenes", {})
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error getting scenes: {str(e)}")
+        return f"Error getting scenes: {str(e)}"
+
+
+@mcp.tool()
 @telemetry_tool("get_session_snapshot")
 @trajectory_tool("get_session_snapshot")
 def get_session_snapshot(

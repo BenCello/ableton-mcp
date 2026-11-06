@@ -34,7 +34,7 @@ MAX_REQUEST_BYTES = 16 * 1024 * 1024
 
 # Bumped whenever the TCP command surface changes; the MCP server compares
 # this to EXPECTED_REMOTE_SCRIPT_VERSION.
-SCRIPT_VERSION = "1.7.1+bnl.1"
+SCRIPT_VERSION = "1.7.1+bnl.2"
 PROTOCOL_VERSION = 1
 
 SCRIPT_CAPABILITIES = [
@@ -59,6 +59,9 @@ SCRIPT_CAPABILITIES = [
     "clear_notes_from_clip",
     "get_cpu_load",
     "set_device_parameter_by_name",
+    "get_return_tracks",
+    "get_master_track",
+    "get_scenes",
 ]
 
 def create_instance(c_instance):
@@ -505,6 +508,16 @@ class AbletonMCP(ControlSurface):
                     response["message"] = "Timeout waiting for operation to complete"
             elif command_type == "get_cpu_load":
                 response["result"] = self._get_cpu_load()
+            elif command_type == "get_return_tracks":
+                response["result"] = self._serialize_return_tracks(
+                    include_params=params.get("include_params", False)
+                )
+            elif command_type == "get_master_track":
+                response["result"] = self._serialize_master_track(
+                    include_params=params.get("include_params", False)
+                )
+            elif command_type == "get_scenes":
+                response["result"] = self._serialize_scenes()
             elif command_type == "set_device_parameter_by_name":
                 response_queue = queue.Queue()
 
